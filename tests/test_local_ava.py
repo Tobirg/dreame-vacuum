@@ -43,6 +43,15 @@ class TestLocalAva(unittest.TestCase):
         self.assertEqual(args, ("POST", "http://127.0.0.1:8080/api/rpc"))
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer my-secret")
         self.assertFalse(kwargs["allow_redirects"])
+        self.assertEqual(kwargs["json"]["params"], [{"siid": 4, "piid": 19}])
+
+    def test_action_uses_ava_did(self):
+        self.client.connect()
+        self.client.send("action", {
+            "did": "123", "siid": 7, "aiid": 1, "in": []
+        })
+        sent = self.client._session.request.call_args.kwargs["json"]
+        self.assertEqual(sent["params"]["did"], "call-7-1")
 
     def test_external_map_url_rejected(self):
         self.assertIsNone(self.client.get_file("https://third-party.invalid/api/maps"))
