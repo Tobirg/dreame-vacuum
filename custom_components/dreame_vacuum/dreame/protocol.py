@@ -29,6 +29,7 @@ from urllib.parse import urlparse, parse_qs, quote, urlsplit
 import re
 
 from .exceptions import DeviceException
+from .local_ava import DreameVacuumLocalAvaProtocol
 from .types import RestartableTimer
 
 DREAME_STRINGS: Final = (
@@ -2539,6 +2540,15 @@ class DreameVacuumProtocol:
         self._connected = False
         self._mac = None
         self._account_type = account_type
+
+        # Modern MIoT operations via a root-enabled on-device HTTP agent.
+        # Keep the existing cloud and Xiaomi pathways untouched.
+        if account_type == "ava":
+            self.prefer_cloud = True
+            self.device = None
+            self.cloud = DreameVacuumLocalAvaProtocol(ip, token, device_id)
+            self.device_cloud = self.cloud
+            return
 
         if ip and token:
             self.device = DreameVacuumDeviceProtocol(ip, token)
