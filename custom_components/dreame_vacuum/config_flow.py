@@ -64,6 +64,7 @@ ACCOUNT_TYPE_MOVA = "mova"
 ACCOUNT_TYPE_MI = "mi"
 ACCOUNT_TYPE_TROUVER = "trouver"
 ACCOUNT_TYPE_LOCAL = "local"
+ACCOUNT_TYPE_AVA = "ava"
 
 ACCOUNT_TYPES = [
     ACCOUNT_TYPE_DREAME,
@@ -71,6 +72,7 @@ ACCOUNT_TYPES = [
     ACCOUNT_TYPE_MOVA,
     ACCOUNT_TYPE_TROUVER,
     ACCOUNT_TYPE_LOCAL,
+    ACCOUNT_TYPE_AVA,
 ]
 
 
@@ -332,6 +334,53 @@ class DreameVacuumFlowHandler(ConfigFlow, domain=DOMAIN):
             error = "wrong_token"
         return await self.async_step_local(error=error)
 
+    async def async_step_ava(
+        self, user_input: dict[str, Any] | None = None, error: str | None = None
+    ) -> FlowResult:
+        """Configure an AVA agent on the vacuum instead of a cloud account."""
+        errors = {}
+        if user_input is not None:
+            self.host = user_input[CONF_HOST].strip()
+            self.token = user_input.get(CONF_TOKEN, "").strip()
+            self.prefer_cloud = True
+            if self.protocol is not None:
+                self.protocol.disconnect()
+            try:
+                self.protocol = DreameVacuumProtocol(
+                    ip=self.host,
+                    token=self.token,
+                    account_type=ACCOUNT_TYPE_AVA,
+                )
+                info = await self.hass.async_add_executor_job(self.protocol.connect)
+                if not info or not info.get("model") or not info.get("mac"):
+                    raise ValueError("Agent did not return model and MAC")
+                self.model = info["model"]
+                self.mac = info["mac"]
+                self.device_id = info.get("did")
+                self.name = info.get("name") or self.model
+                self.load_devices()
+                if self.model not in self.models:
+                    errors["base"] = "unsupported"
+                else:
+                    await self.async_set_unique_id(format_mac(self.mac))
+                    self._abort_if_unique_id_configured()
+                    return await self.async_step_options()
+            except Exception:
+                errors["base"] = "cannot_connect"
+        elif error:
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id=ACCOUNT_TYPE_AVA,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=self.host or ""): str,
+                    vol.Optional(CONF_TOKEN, default=self.token or ""): str,
+                }
+            ),
+            errors=errors,
+        )
+
     async def async_step_local(
         self,
         user_input: dict[str, Any] | None = None,
@@ -365,6 +414,8 @@ class DreameVacuumFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_login(self, error=None):
+        if self.account_type == ACCOUNT_TYPE_AVA:
+            return await self.async_step_ava(error=error)
         if self.account_type == ACCOUNT_TYPE_MI:
             return await self.async_step_mi(error=error)
         if self.account_type == ACCOUNT_TYPE_DREAME:
