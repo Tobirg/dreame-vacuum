@@ -35,6 +35,7 @@ class DreameVacuumLocalAvaProtocol:
         self._did = str(device_id) if device_id else None
         self._info = None
         self._session = requests.Session()
+        self._session.trust_env = False  # Do not route LAN credentials through HTTP proxies.
         self._logged_in = False
         self._connected = False
         self._auth_failed = False
@@ -64,7 +65,7 @@ class DreameVacuumLocalAvaProtocol:
         return ""
 
     def _request(self, method, path, *, params=None, body=None, raw=False, timeout=10):
-        headers = {"Accept": "application/json"}
+        headers = {"Accept": "application/octet-stream" if raw else "application/json"}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         try:
@@ -124,9 +125,26 @@ class DreameVacuumLocalAvaProtocol:
     def send(self, method, parameters=None, retry_count=2, timeout=None):
         if not self._logged_in and not self.login():
             return None
+        if method not in ("get_properties", "set_properties", "action"):
+            _LOGGER.warning("Unsupported local AVA method: %s", method)
+            return None
+        wire_params = parameters if parameters is not None else []
+        if method == "get_properties" and isinstance(parameters, list):
+            # AVA accepts siid/piid pairs; keep library-specific did only for
+            # matching the returned values to their property enum.
+            wire_params = [
+                {key: value for key, value in item.items() if key != "did"}
+                if isinstance(item, dict) else item
+                for item in parameters
+            ]
+        elif method == "action" and isinstance(parameters, dict):
+            wire_params = dict(parameters)
+            if "siid" in wire_params and "aiid" in wire_params:
+                # Device-side AVA uses call-siid-aiid, unlike cloud device DID.
+                wire_params["did"] = f"call-{wire_params['siid']}-{wire_params['aiid']}"
         request = {
             "method": method,
-            "params": parameters if parameters is not None else [],
+            "params": wire_params,
         }
         if self._did:
             request["did"] = self._did
