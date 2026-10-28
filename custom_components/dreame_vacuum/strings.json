@@ -104,6 +104,13 @@
       "reauth_confirm": {
         "description": "Dreame Vacuum integration needs to re-authenticate your account in order to update the tokens or add missing cloud credentials.",
         "title": "Reauthenticate Integration"
+      },
+      "ava": {
+        "data": {
+          "host": "Agent host (with port)",
+          "token": "Agent API token (optional)"
+        },
+        "description": "Connect to the HTTP agent running on the vacuum without DreameHome. The agent must expose GET /api/info and POST /api/rpc."
       }
     }
   },
@@ -194,7 +201,8 @@
         "mi": "Xiaomi Home",
         "mova": "MOVAhome",
         "trouver": "TROUVER",
-        "local": "Local Connection"
+        "local": "Local Connection",
+        "ava": "Local AVA Agent (root)"
       }
     },
     "country": {
